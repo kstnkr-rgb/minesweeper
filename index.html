@@ -581,12 +581,11 @@ function onClick(r, c) {
       render(); return;
     }
 
-    // Tap on open trash (2nd phase) → destroy
+    // Tap on open trash (2nd phase) → lose
     if (cell.st === 'preview' && cell.obj === 'trash') {
-      cell.st = 'destroyed';
+      cell.st = 'open-bomb';
       movesLeft--;
-      advanceNeighbors(r, c);
-      checkStuck();
+      phase = 'lost';
       render(); return;
     }
 
@@ -777,7 +776,7 @@ function renderGrid() {
           break;
         case 'open-bomb':
           d.classList.add('open-bomb');
-          d.textContent = '💣';
+          d.textContent = cell.obj === 'trash' ? '🗑' : '💣';
           break;
       }
 
@@ -821,7 +820,7 @@ function renderHUD() {
     case 'lost':
       stEl.textContent = '';
       msgEl.className = 'msg lost';
-      msgEl.textContent = '💥 Игра окончена!';
+      msgEl.textContent = gameMode === 'bomber' ? '🗑 Попался мусор!' : '💥 Игра окончена!';
       break;
     case 'over':
       stEl.textContent = '';
