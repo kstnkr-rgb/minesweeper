@@ -556,10 +556,10 @@ function advanceNeighbors(r, c) {
   nbrs(r, c).forEach(([nr, nc]) => {
     const n = grid[nr][nc];
     if (n.st === 'hidden')   { n.st = n.obj ? 'question' : 'safe'; return; }
-    if (n.st === 'safe')     { n.st = 'revealed'; return; }
+    // safe (green) cells are immune to explosions
     if (n.st === 'question') { n.st = 'preview';  return; }
     if (n.st === 'preview')  { n.st = 'destroyed'; return; }
-    // revealed / open-* / destroyed — не трогаем
+    // safe / revealed / open-* / destroyed — не трогаем
   });
 }
 
@@ -571,6 +571,9 @@ function onClick(r, c) {
   // ── BOMBER MODE ──────────────────────────────────────────────
   if (gameMode === 'bomber') {
     if (cell.st === 'destroyed') return;
+
+    // Last move: block hidden/safe if prizes are visible (same rule as classic)
+    if (movesLeft === 1 && (cell.st === 'hidden' || cell.st === 'safe') && !noPrizesVisible()) return;
 
     // Tap on open prize (2nd phase) → collect → win
     if (cell.st === 'preview' && cell.obj === 'prize') {
@@ -702,10 +705,10 @@ function renderGrid() {
       const d = document.createElement('div');
       d.className = 'cell';
 
-      const lastHiddenBlocked = gameMode !== 'bomber' && isLast && (cell.st === 'hidden' || cell.st === 'safe') && !noPrizesVisible();
+      const lastHiddenBlocked = isLast && (cell.st === 'hidden' || cell.st === 'safe') && !noPrizesVisible();
 
       const clickable = gameMode === 'bomber'
-        ? !ended && !['revealed','open-prize','destroyed'].includes(cell.st)
+        ? !ended && !['revealed','open-prize','destroyed'].includes(cell.st) && !lastHiddenBlocked
         : !ended &&
           cell.st !== 'revealed' &&
           cell.st !== 'open-prize' &&
