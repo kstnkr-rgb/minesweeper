@@ -531,8 +531,7 @@ function checkStuck() {
   if (movesLeft <= 0) { phase = 'over'; return; }
   if (gameMode === 'bomber') {
     const ok = grid.some(row => row.some(cell =>
-      cell.st === 'hidden' || cell.st === 'safe' ||
-      cell.st === 'question' || cell.st === 'preview'
+      cell.st === 'hidden' || cell.st === 'safe'
     ));
     if (!ok) { phase = 'over'; return; }
     return;
@@ -570,27 +569,8 @@ function onClick(r, c) {
 
   // ── BOMBER MODE ──────────────────────────────────────────────
   if (gameMode === 'bomber') {
-    if (cell.st === 'destroyed') return;
-
-    // Last move: block hidden/safe if prizes are visible (same rule as classic)
-    if (movesLeft === 1 && (cell.st === 'hidden' || cell.st === 'safe') && !noPrizesVisible()) return;
-
-    // Tap on open prize (2nd phase) → collect → win
-    if (cell.st === 'preview' && cell.obj === 'prize') {
-      cell.st = 'open-prize';
-      movesLeft--;
-      advanceNeighbors(r, c);
-      phase = 'won';
-      render(); return;
-    }
-
-    // Tap on open trash (2nd phase) → lose
-    if (cell.st === 'preview' && cell.obj === 'trash') {
-      cell.st = 'open-bomb';
-      movesLeft--;
-      phase = 'lost';
-      render(); return;
-    }
+    // Only blue (hidden) and green (safe) cells accept a bomb
+    if (cell.st !== 'hidden' && cell.st !== 'safe') return;
 
     // First tap → place objects
     if (phase === 'idle') {
@@ -598,7 +578,23 @@ function onClick(r, c) {
       placeObjects(r, c);
     }
 
-    // Any other cell → bomb epicenter
+    // Hit trash → lose
+    if (cell.obj === 'trash') {
+      cell.st = 'open-bomb';
+      movesLeft--;
+      phase = 'lost';
+      render(); return;
+    }
+
+    // Hit prize → win
+    if (cell.obj === 'prize') {
+      cell.st = 'open-prize';
+      movesLeft--;
+      phase = 'won';
+      render(); return;
+    }
+
+    // Empty cell → bomb epicenter
     cell.st = 'revealed';
     movesLeft--;
     advanceNeighbors(r, c);
@@ -705,10 +701,10 @@ function renderGrid() {
       const d = document.createElement('div');
       d.className = 'cell';
 
-      const lastHiddenBlocked = isLast && (cell.st === 'hidden' || cell.st === 'safe') && !noPrizesVisible();
+      const lastHiddenBlocked = gameMode !== 'bomber' && isLast && (cell.st === 'hidden' || cell.st === 'safe') && !noPrizesVisible();
 
       const clickable = gameMode === 'bomber'
-        ? !ended && !['revealed','open-prize','destroyed'].includes(cell.st) && !lastHiddenBlocked
+        ? !ended && (cell.st === 'hidden' || cell.st === 'safe')
         : !ended &&
           cell.st !== 'revealed' &&
           cell.st !== 'open-prize' &&
