@@ -307,6 +307,19 @@
     .replay-btns { display: flex; gap: 12px; justify-content: center; }
     .replay-btn-yes { background: linear-gradient(145deg, #2563eb, #1a4fd8); }
     .replay-btn-no  { background: linear-gradient(145deg, #374151, #1f2937); box-shadow: none; }
+
+    #mode-bar { display: flex; gap: 8px; justify-content: center; margin-bottom: 4px; }
+    .mode-btn { padding: 6px 16px; border-radius: 20px; border: 1px solid #2563eb66;
+                background: #0f1535; color: #94a3b8; font-size: .85rem; cursor: pointer; transition: all .2s; }
+    .mode-btn.active { background: linear-gradient(145deg, #2563eb, #1a4fd8); color: #fff; }
+
+    .cell.destroyed {
+      background: linear-gradient(145deg, #1a1a2e, #16162a);
+      border: 1px solid #374151;
+      cursor: default;
+      color: #4b5563;
+      font-size: calc(var(--cell) * 0.28);
+    }
   </style>
 </head>
 <body>
@@ -314,6 +327,11 @@
   <div>
     <div class="title">Mystery Grid</div>
     <div class="subtitle">Найди приз за 3 хода</div>
+  </div>
+
+  <div id="mode-bar">
+    <button class="mode-btn active" id="mode-classic">Классика</button>
+    <button class="mode-btn"        id="mode-bomber">Бомбардировщик</button>
   </div>
 
   <div class="hud">
@@ -348,12 +366,12 @@
    НАСТРОЙКИ — меняйте эти значения для изменения игры
    ============================================================ */
 const CFG = {
-  GRID_SIZE:        6,   // Размер поля N×N
-  BOMBS:            1,   // Количество бомб
-  PRIZES:           5,   // Количество призов
+  GRID_SIZE:        5,   // Размер поля N×N
+  BOMBS:            5,   // Количество бомб
+  PRIZES:           8,   // Количество призов
   MAX_MOVES:        4,   // Ходов за игру
   MIN_FIRST_ACT:    1,   // Мин. активных клеток вокруг первого тапа
-  MAX_FIRST_ACT:    1,   // Макс. активных клеток вокруг первого тапа
+  MAX_FIRST_ACT:    3,   // Макс. активных клеток вокруг первого тапа
   PRIZES_LIST: [
     'Кофе',
     '-10%',
@@ -381,6 +399,10 @@ const CFG = {
     'Билет',
     'Билет',
     'Дополнительный ход',
+    'Дополнительный ход',
+    'Дополнительный ход',
+    'Дополнительный ход',
+    'Дополнительный ход',
   ],
 };
 /* ============================================================ */
@@ -388,7 +410,8 @@ const CFG = {
 const DEBUG = false; // показывать маркеры объектов на скрытых клетках
 
 let grid = [], movesLeft = 0, phase = 'idle';
-// phase: idle | playing | won | lost | over
+// phase: idle | playing | won | lost | over | replay-prompt
+let gameMode = 'classic'; // 'classic' | 'bomber'
 
 const rnd = n => Math.floor(Math.random() * n);
 
@@ -424,6 +447,9 @@ function initGame() {
   const available = Math.min(window.innerWidth - 48, 420);
   const sz = Math.min(80, Math.max(48, Math.floor((available - 7 * (N - 1)) / N)));
   document.documentElement.style.setProperty('--cell', sz + 'px');
+  document.getElementById('cnt-prizes').textContent = `🎁 Призов: ${CFG.PRIZES}`;
+  document.getElementById('cnt-bombs').textContent  = gameMode === 'bomber'
+    ? `🗑 Мусора: ${CFG.BOMBS}` : `💣 Бомб: ${CFG.BOMBS}`;
   render();
 }
 
@@ -458,8 +484,9 @@ function placeObjects(fr, fc) {
   const nextName = () => namePool[nameIdx++ % namePool.length];
 
   const assignCell = (r, c, type) => {
-    grid[r][c].obj = type;
-    if (type === 'prize') grid[r][c].name = nextName();
+    const objType = type === 'bomb' && gameMode === 'bomber' ? 'trash' : type;
+    grid[r][c].obj = objType;
+    if (objType === 'prize') grid[r][c].name = nextName();
   };
 
   actv.forEach(([r,c], i) => { if (i < types.length) assignCell(r, c, types[i]); });
@@ -502,6 +529,14 @@ function checkReplayPrompt() {
 function checkStuck() {
   if (phase !== 'playing') return;
   if (movesLeft <= 0) { phase = 'over'; return; }
+  if (gameMode === 'bomber') {
+    const ok = grid.some(row => row.some(cell =>
+      cell.st === 'hidden' || cell.st === 'safe' ||
+      cell.st === 'question' || cell.st === 'preview'
+    ));
+    if (!ok) { phase = 'over'; return; }
+    return;
+  }
   if (movesLeft !== 1) return;
   const ok = grid.some(row => row.some(cell =>
     cell.st === 'question' || cell.st === 'preview'
@@ -517,10 +552,58 @@ function revealNeighborsBonus(r, c) {
   });
 }
 
+function advanceNeighbors(r, c) {
+  nbrs(r, c).forEach(([nr, nc]) => {
+    const n = grid[nr][nc];
+    if (n.st === 'hidden')   { n.st = n.obj ? 'question' : 'safe'; return; }
+    if (n.st === 'safe')     { n.st = 'revealed'; return; }
+    if (n.st === 'question') { n.st = 'preview';  return; }
+    if (n.st === 'preview')  { n.st = 'destroyed'; return; }
+    // revealed / open-* / destroyed — не трогаем
+  });
+}
+
 function onClick(r, c) {
   if (phase !== 'idle' && phase !== 'playing') return;
   const cell = grid[r][c];
   if (cell.st === 'revealed' || cell.st === 'open-prize' || cell.st === 'open-bomb') return;
+
+  // ── BOMBER MODE ──────────────────────────────────────────────
+  if (gameMode === 'bomber') {
+    if (cell.st === 'destroyed') return;
+
+    // Tap on open prize (2nd phase) → collect → win
+    if (cell.st === 'preview' && cell.obj === 'prize') {
+      cell.st = 'open-prize';
+      movesLeft--;
+      advanceNeighbors(r, c);
+      phase = 'won';
+      render(); return;
+    }
+
+    // Tap on open trash (2nd phase) → destroy
+    if (cell.st === 'preview' && cell.obj === 'trash') {
+      cell.st = 'destroyed';
+      movesLeft--;
+      advanceNeighbors(r, c);
+      checkStuck();
+      render(); return;
+    }
+
+    // First tap → place objects
+    if (phase === 'idle') {
+      phase = 'playing';
+      placeObjects(r, c);
+    }
+
+    // Any other cell → bomb epicenter
+    cell.st = 'revealed';
+    movesLeft--;
+    advanceNeighbors(r, c);
+    checkStuck();
+    render(); return;
+  }
+  // ── END BOMBER ───────────────────────────────────────────────
 
   // ── First tap: place objects, reveal empty cell ──────────────
   if (phase === 'idle') {
@@ -620,15 +703,16 @@ function renderGrid() {
       const d = document.createElement('div');
       d.className = 'cell';
 
-      const lastHiddenBlocked = isLast && (cell.st === 'hidden' || cell.st === 'safe') && !noPrizesVisible();
+      const lastHiddenBlocked = gameMode !== 'bomber' && isLast && (cell.st === 'hidden' || cell.st === 'safe') && !noPrizesVisible();
 
-      const clickable =
-        !ended &&
-        cell.st !== 'revealed' &&
-        cell.st !== 'open-prize' &&
-        cell.st !== 'open-bomb' &&
-        !lastHiddenBlocked &&
-        !(cell.st === 'preview' && cell.obj === 'bomb');
+      const clickable = gameMode === 'bomber'
+        ? !ended && !['revealed','open-prize','destroyed'].includes(cell.st)
+        : !ended &&
+          cell.st !== 'revealed' &&
+          cell.st !== 'open-prize' &&
+          cell.st !== 'open-bomb' &&
+          !lastHiddenBlocked &&
+          !(cell.st === 'preview' && cell.obj === 'bomb');
 
       if (clickable) {
         d.classList.add('go');
@@ -659,10 +743,10 @@ function renderGrid() {
       };
 
       // End-of-game: show all remaining objects
-      if (ended && cell.obj && cell.st !== 'open-prize' && cell.st !== 'open-bomb') {
+      if (ended && cell.obj && cell.st !== 'open-prize' && cell.st !== 'open-bomb' && cell.st !== 'destroyed') {
         d.classList.add('ghost');
         if (cell.obj === 'prize') d.appendChild(prizeLabel());
-        else d.textContent = '💣';
+        else d.textContent = cell.obj === 'bomb' ? '💣' : '🗑';
         el.appendChild(d);
         continue;
       }
@@ -678,7 +762,11 @@ function renderGrid() {
         case 'preview':
           d.classList.add('preview');
           if (cell.obj === 'prize') d.appendChild(prizeLabel());
-          else d.textContent = '💣';
+          else d.textContent = cell.obj === 'bomb' ? '💣' : '🗑';
+          break;
+        case 'destroyed':
+          d.classList.add('destroyed');
+          d.textContent = cell.obj === 'prize' ? '✦' : '✕';
           break;
         case 'revealed':
           d.classList.add('revealed');
@@ -718,11 +806,12 @@ function renderHUD() {
 
   switch (phase) {
     case 'idle':
-      stEl.textContent = 'Нажмите на любую клетку';
+      stEl.textContent = gameMode === 'bomber' ? 'Тапни, чтобы поставить бомбу' : 'Нажмите на любую клетку';
       break;
     case 'playing':
       stEl.className = 'status' + (isLast ? ' warn' : '');
-      stEl.textContent = isLast ? '⚡ Последний ход!' : `Осталось ходов: ${movesLeft}`;
+      stEl.textContent = isLast ? '⚡ Последний ход!' :
+        gameMode === 'bomber' ? `Бомб: ${movesLeft}` : `Осталось ходов: ${movesLeft}`;
       break;
     case 'won':
       stEl.textContent = '';
@@ -740,14 +829,15 @@ function renderHUD() {
       msgEl.textContent = 'Ходы закончились';
       break;
   }
+  document.getElementById('mode-classic').classList.toggle('active', gameMode === 'classic');
+  document.getElementById('mode-bomber').classList.toggle('active',  gameMode === 'bomber');
 }
-
-document.getElementById('cnt-prizes').textContent = `🎁 Призов: ${CFG.PRIZES}`;
-document.getElementById('cnt-bombs').textContent  = `💣 Бомб: ${CFG.BOMBS}`;
 
 document.getElementById('btn').addEventListener('click', initGame);
 document.getElementById('replay-yes').addEventListener('click', initGame);
 document.getElementById('replay-no').addEventListener('click', () => { phase = 'playing'; render(); });
+document.getElementById('mode-classic').addEventListener('click', () => { gameMode = 'classic'; initGame(); });
+document.getElementById('mode-bomber').addEventListener('click',  () => { gameMode = 'bomber';  initGame(); });
 initGame();
 </script>
 </body>
