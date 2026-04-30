@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mystery Grid</title>
+  <style>
+    :root { --cell: 72px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: linear-gradient(160deg, #060b1c 0%, #0a1328 100%);
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #game {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 22px;
+      padding: 28px;
+    }
+
+    .title {
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: #93c5fd;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    .subtitle {
+      font-size: 0.78rem;
+      color: #475569;
+      letter-spacing: 1px;
+      text-align: center;
+      margin-top: 4px;
+    }
+
+    .hud {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #3b82f6;
+      border: 2px solid #60a5fa;
+      transition: all 0.3s;
+    }
+
+    .dot.used {
+      background: #1a2540;
+      border-color: #263048;
+    }
+
+    .status {
+      font-size: 0.85rem;
+      color: #64748b;
+      text-align: center;
+      letter-spacing: 0.3px;
+    }
+
+    .status.warn { color: #fbbf24; font-weight: 600; }
+
+    #grid {
+      display: grid;
+      gap: 7px;
+      perspective: 800px;
+    }
+
+    .counters {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .counter {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    .counter.prizes {
+      background: #14532d44;
+      border: 1px solid #22c55e55;
+      color: #4ade80;
+    }
+
+    .counter.bombs {
+      background: #7f1d1d44;
+      border: 1px solid #f8717155;
+      color: #f87171;
+    }
+
+    .cell {
+      width: var(--cell);
+      height: var(--cell);
+      border-radius: 11px;
+      background: linear-gradient(145deg, #1d4ed8, #1a42c4);
+      border: 2px solid #2563eb;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: calc(var(--cell) * 0.38);
+      transition: background 0.15s, transform 0.1s, box-shadow 0.2s, opacity 0.2s;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .cell.go:hover {
+      background: linear-gradient(145deg, #2563eb, #1d4ed8);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px #2563eb55;
+    }
+
+    .cell.go:active { transform: translateY(0); }
+
+    .cell.revealed {
+      background: linear-gradient(145deg, #0c1a30, #091422);
+      border-color: #172338;
+      cursor: default;
+    }
+
+    .cell.question {
+      border-color: #f59e0b;
+      box-shadow: 0 0 10px #f59e0b33;
+      color: #fbbf24;
+      font-size: calc(var(--cell) * 0.46);
+      font-weight: 900;
+    }
+
+    .cell.question.go:hover { box-shadow: 0 0 22px #f59e0b55; }
+
+    .cell.preview {
+      background: linear-gradient(145deg, #0c2840, #081c30);
+      border-color: #38bdf8;
+      box-shadow: 0 0 10px #38bdf833;
+    }
+
+    .cell.preview.go:hover { box-shadow: 0 0 22px #38bdf855; }
+
+    .cell.open-prize {
+      background: linear-gradient(145deg, #14532d, #0f3d21);
+      border-color: #22c55e;
+      box-shadow: 0 0 26px #22c55e55;
+      cursor: default;
+      animation: popIn 0.35s cubic-bezier(0.34,1.56,0.64,1);
+    }
+
+    .cell.open-bomb {
+      background: linear-gradient(145deg, #7f1d1d, #4f0f0f);
+      border-color: #f87171;
+      box-shadow: 0 0 26px #f8717155;
+      cursor: default;
+      animation: boom 0.4s ease;
+    }
+
+    .cell.ghost {
+      background: linear-gradient(145deg, #111a28, #0d1520);
+      border-color: #1e2a3a;
+      cursor: default;
+    }
+
+    .cell.safe {
+      background: linear-gradient(145deg, #0f3d1a, #0a2812);
+      border-color: #22c55e66;
+      box-shadow: 0 0 8px #22c55e22;
+    }
+
+    .cell.safe.go:hover { box-shadow: 0 0 18px #22c55e44; }
+
+    .cell.dim {
+      opacity: 0.32;
+      cursor: not-allowed;
+    }
+
+    .dbg {
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .dbg-bomb  { color: #ff6b6b; }
+    .dbg-prize { color: #6bffb8; }
+
+    .prize-name {
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.3;
+      text-align: center;
+      padding: 0 4px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      pointer-events: none;
+    }
+
+    .cell.preview    .prize-name { color: #7dd3fc; }
+    .cell.open-prize .prize-name { color: #bbf7d0; font-size: 11px; }
+    .cell.ghost      .prize-name { color: #ffffff; }
+
+    @keyframes flipIn {
+      0%   { transform: rotateY(90deg); opacity: 0.2; }
+      100% { transform: rotateY(0deg);  opacity: 1;   }
+    }
+
+    .flip-in { animation: flipIn 0.28s ease-out; }
+
+    @keyframes popIn {
+      0%   { transform: scale(0.65); opacity: 0.4; }
+      100% { transform: scale(1);    opacity: 1;   }
+    }
+
+    @keyframes boom {
+      0%   { transform: scale(1); }
+      20%  { transform: scale(1.18) rotate(-5deg); }
+      45%  { transform: scale(0.92) rotate(5deg);  }
+      65%  { transform: scale(1.08) rotate(-3deg); }
+      85%  { transform: scale(0.97) rotate(2deg);  }
+      100% { transform: scale(1)  rotate(0deg);   }
+    }
+
+    .msg {
+      font-size: 1.2rem;
+      font-weight: 600;
+      text-align: center;
+      letter-spacing: 1px;
+      min-height: 2rem;
+    }
+
+    .msg.won  { color: #4ade80; }
+    .msg.lost { color: #f87171; }
+    .msg.over { color: #94a3b8; }
+
+    .btn {
+      padding: 11px 38px;
+      background: linear-gradient(145deg, #2563eb, #1a4fd8);
+      color: #e2e8f0;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 4px 18px #2563eb44;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      background: linear-gradient(145deg, #3b82f6, #2563eb);
+      box-shadow: 0 6px 26px #3b82f666;
+      transform: translateY(-1px);
+    }
+
+    .btn:active { transform: translateY(0); }
+
+    .replay-overlay {
+      position: fixed;
+      inset: 0;
+      background: #00000099;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .replay-overlay.hidden { display: none; }
+
+    .replay-box {
+      background: linear-gradient(145deg, #0f1535, #0a1020);
+      border: 1px solid #2563eb66;
+      border-radius: 16px;
+      padding: 28px 24px;
+      text-align: center;
+      max-width: 280px;
+      width: 90%;
+    }
+
+    .replay-text {
+      color: #e2e8f0;
+      font-size: 1rem;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    .replay-btns { display: flex; gap: 12px; justify-content: center; }
+    .replay-btn-yes { background: linear-gradient(145deg, #2563eb, #1a4fd8); }
+    .replay-btn-no  { background: linear-gradient(145deg, #374151, #1f2937); box-shadow: none; }
+  </style>
+</head>
+<body>
+<div id="game">
+  <div>
+    <div class="title">Mystery Grid</div>
+    <div class="subtitle">Найди приз за 3 хода</div>
+  </div>
+
+  <div class="hud">
+    <div class="dots" id="dots"></div>
+    <div class="status" id="status">Нажмите на любую клетку</div>
+  </div>
+
+  <div class="counters">
+    <div class="counter prizes" id="cnt-prizes"></div>
+    <div class="counter bombs"  id="cnt-bombs"></div>
+  </div>
+
+  <div id="grid"></div>
+
+  <div class="msg" id="msg"></div>
+
+  <button class="btn" id="btn">Играть</button>
+</div>
+
+<div id="replay-overlay" class="replay-overlay hidden">
+  <div class="replay-box">
+    <p class="replay-text">У вас нет доступных призов, хотите переиграть?</p>
+    <div class="replay-btns">
+      <button class="btn replay-btn-yes" id="replay-yes">Да</button>
+      <button class="btn replay-btn-no"  id="replay-no">Нет</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   НАСТРОЙКИ — меняйте эти значения для изменения игры
+   ============================================================ */
+const CFG = {
+  GRID_SIZE:        6,   // Размер поля N×N
+  BOMBS:            1,   // Количество бомб
+  PRIZES:           5,   // Количество призов
+  MAX_MOVES:        4,   // Ходов за игру
+  MIN_FIRST_ACT:    1,   // Мин. активных клеток вокруг первого тапа
+  MAX_FIRST_ACT:    1,   // Макс. активных клеток вокруг первого тапа
+  PRIZES_LIST: [
+    'Кофе',
+    '-10%',
+    '-10%',
+    '-10%',
+    '-15%',
+    '-20%',
+    'Фишка с котом',
+    'Скидка на сладкое',
+    'Кошачий корм',
+    'Кошачий корм',
+    'Кошачий корм',
+    'Ещё одна игра',
+    'Ещё одна игра',
+    'Предсказание',
+    'Предсказание',
+    'Предсказание',
+    'Предсказание',
+    '50 бонусов',
+    'Билет',
+    'Билет',
+    'Билет',
+    'Билет',
+    'Билет',
+    'Билет',
+    'Билет',
+    'Дополнительный ход',
+  ],
+};
+/* ============================================================ */
+
+const DEBUG = false; // показывать маркеры объектов на скрытых клетках
+
+let grid = [], movesLeft = 0, phase = 'idle';
+// phase: idle | playing | won | lost | over
+
+const rnd = n => Math.floor(Math.random() * n);
+
+function shuffle(a) {
+  const b = [...a];
+  for (let i = b.length - 1; i > 0; i--) {
+    const j = rnd(i + 1);
+    [b[i], b[j]] = [b[j], b[i]];
+  }
+  return b;
+}
+
+function nbrs(r, c) {
+  const out = [];
+  for (let dr = -1; dr <= 1; dr++)
+    for (let dc = -1; dc <= 1; dc++) {
+      if (!dr && !dc) continue;
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < CFG.GRID_SIZE && nc >= 0 && nc < CFG.GRID_SIZE)
+        out.push([nr, nc]);
+    }
+  return out;
+}
+
+function initGame() {
+  movesLeft = CFG.MAX_MOVES;
+  phase = 'idle';
+  const N = CFG.GRID_SIZE;
+  grid = Array.from({length: N}, () =>
+    Array.from({length: N}, () => ({ obj: null, st: 'hidden', prevSt: null }))
+  );
+  // Fit grid to screen width with padding and gaps
+  const available = Math.min(window.innerWidth - 48, 420);
+  const sz = Math.min(80, Math.max(48, Math.floor((available - 7 * (N - 1)) / N)));
+  document.documentElement.style.setProperty('--cell', sz + 'px');
+  render();
+}
+
+function placeObjects(fr, fc) {
+  const nbs = nbrs(fr, fc);
+  const maxA = Math.min(CFG.MAX_FIRST_ACT, nbs.length);
+  const minA = Math.min(CFG.MIN_FIRST_ACT, maxA);
+  const cnt  = minA + rnd(maxA - minA + 1);
+  const actv = shuffle(nbs).slice(0, cnt);
+
+  // Exclude ALL neighbors of the first click from "other" so no stray
+  // objects land near the first tap and inflate the ? count beyond cnt.
+  const allNbsSet = new Set(nbs.map(([r,c]) => `${r},${c}`));
+
+  const other = [];
+  for (let r = 0; r < CFG.GRID_SIZE; r++)
+    for (let c = 0; c < CFG.GRID_SIZE; c++) {
+      if (r === fr && c === fc) continue;
+      if (allNbsSet.has(`${r},${c}`)) continue;
+      other.push([r, c]);
+    }
+
+  const total = CFG.BOMBS + CFG.PRIZES;
+  const types = shuffle([
+    ...Array(CFG.BOMBS).fill('bomb'),
+    ...Array(CFG.PRIZES).fill('prize'),
+  ]);
+
+  // Shuffled prize name pool (cycles if PRIZES > list length)
+  const namePool = shuffle([...CFG.PRIZES_LIST]);
+  let nameIdx = 0;
+  const nextName = () => namePool[nameIdx++ % namePool.length];
+
+  const assignCell = (r, c, type) => {
+    grid[r][c].obj = type;
+    if (type === 'prize') grid[r][c].name = nextName();
+  };
+
+  actv.forEach(([r,c], i) => { if (i < types.length) assignCell(r, c, types[i]); });
+  shuffle(other).forEach(([r,c], i) => {
+    const idx = cnt + i;
+    if (idx < total) assignCell(r, c, types[idx]);
+  });
+}
+
+function showQuestions(r, c) {
+  nbrs(r, c).forEach(([nr, nc]) => {
+    const cell = grid[nr][nc];
+    if (cell.st !== 'hidden') return;
+    cell.st = cell.obj ? 'question' : 'safe';
+  });
+}
+
+// When tapping near existing '?' cells, reveal their content
+function autoRevealOverlap(r, c) {
+  nbrs(r, c).forEach(([nr, nc]) => {
+    if (grid[nr][nc].st === 'question') grid[nr][nc].st = 'preview';
+  });
+}
+
+function noPrizesVisible() {
+  return !grid.some(row => row.some(cell =>
+    (cell.st === 'question' || cell.st === 'preview') && cell.obj === 'prize'
+  ));
+}
+
+function checkReplayPrompt() {
+  if (movesLeft !== 1 || phase !== 'playing') return;
+  if (!noPrizesVisible()) return;
+  const hasBombs = grid.some(row => row.some(cell =>
+    (cell.st === 'question' || cell.st === 'preview') && cell.obj === 'bomb'
+  ));
+  if (hasBombs) phase = 'replay-prompt';
+}
+
+function checkStuck() {
+  if (phase !== 'playing') return;
+  if (movesLeft <= 0) { phase = 'over'; return; }
+  if (movesLeft !== 1) return;
+  const ok = grid.some(row => row.some(cell =>
+    cell.st === 'question' || cell.st === 'preview'
+  ));
+  if (!ok) phase = 'over';
+}
+
+function revealNeighborsBonus(r, c) {
+  nbrs(r, c).forEach(([nr, nc]) => {
+    const n = grid[nr][nc];
+    if (['revealed','open-prize','open-bomb'].includes(n.st)) return;
+    n.st = n.obj ? 'preview' : 'revealed';
+  });
+}
+
+function onClick(r, c) {
+  if (phase !== 'idle' && phase !== 'playing') return;
+  const cell = grid[r][c];
+  if (cell.st === 'revealed' || cell.st === 'open-prize' || cell.st === 'open-bomb') return;
+
+  // ── First tap: place objects, reveal empty cell ──────────────
+  if (phase === 'idle') {
+    phase = 'playing';
+    placeObjects(r, c);
+    cell.st = 'revealed';
+    movesLeft--;
+    showQuestions(r, c);
+    checkReplayPrompt();
+    checkStuck();
+    render();
+    return;
+  }
+
+  // ── Tap on revealed object (? or preview) ────────────────────
+  if (cell.st === 'question' || cell.st === 'preview') {
+    if (cell.st === 'preview' && cell.obj === 'bomb') return; // visible bomb — untouchable
+    cell.st = cell.obj === 'prize' ? 'open-prize' : 'open-bomb';
+    movesLeft--;
+    if (cell.obj === 'prize' && cell.name === 'Дополнительный ход') {
+      revealNeighborsBonus(r, c);
+      movesLeft++;
+      checkReplayPrompt();
+      checkStuck();
+    } else {
+      phase = cell.obj === 'prize' ? 'won' : 'lost';
+    }
+    render();
+    return;
+  }
+
+  // ── Tap on safe (confirmed empty) cell ──────────────────────
+  if (cell.st === 'safe') {
+    if (movesLeft === 1 && !noPrizesVisible()) return;
+    autoRevealOverlap(r, c);
+    cell.st = 'revealed';
+    movesLeft--;
+    showQuestions(r, c);
+    checkReplayPrompt();
+    checkStuck();
+    render();
+    return;
+  }
+
+  // ── Tap on hidden cell ────────────────────────────────────────
+  if (cell.st === 'hidden') {
+    if (movesLeft === 1 && !noPrizesVisible() && !cell.obj) return;
+
+    if (cell.obj) {
+      // Direct hit on an object
+      cell.st = cell.obj === 'prize' ? 'open-prize' : 'open-bomb';
+      movesLeft--;
+      if (cell.obj === 'prize' && cell.name === 'Дополнительный ход') {
+        revealNeighborsBonus(r, c);
+        movesLeft++;
+        checkReplayPrompt();
+        checkStuck();
+      } else {
+        phase = cell.obj === 'prize' ? 'won' : 'lost';
+      }
+    } else {
+      // Empty cell — reveal and show hints around it
+      autoRevealOverlap(r, c);
+      cell.st = 'revealed';
+      movesLeft--;
+      showQuestions(r, c);
+      checkReplayPrompt();
+      checkStuck();
+    }
+    render();
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────
+function renderOverlay() {
+  document.getElementById('replay-overlay')
+    .classList.toggle('hidden', phase !== 'replay-prompt');
+}
+
+function render() {
+  renderGrid();
+  renderHUD();
+  renderOverlay();
+}
+
+function renderGrid() {
+  const el = document.getElementById('grid');
+  el.style.gridTemplateColumns = `repeat(${CFG.GRID_SIZE}, var(--cell))`;
+  el.innerHTML = '';
+
+  const ended   = ['won','lost','over'].includes(phase);
+  const isLast  = movesLeft === 1 && phase === 'playing';
+
+  for (let r = 0; r < CFG.GRID_SIZE; r++) {
+    for (let c = 0; c < CFG.GRID_SIZE; c++) {
+      const cell = grid[r][c];
+      const d = document.createElement('div');
+      d.className = 'cell';
+
+      const lastHiddenBlocked = isLast && (cell.st === 'hidden' || cell.st === 'safe') && !noPrizesVisible();
+
+      const clickable =
+        !ended &&
+        cell.st !== 'revealed' &&
+        cell.st !== 'open-prize' &&
+        cell.st !== 'open-bomb' &&
+        !lastHiddenBlocked &&
+        !(cell.st === 'preview' && cell.obj === 'bomb');
+
+      if (clickable) {
+        d.classList.add('go');
+        d.addEventListener('click', () => onClick(r, c));
+      }
+
+      // Flip animation when active cell changes state
+      const flipStates = ['question', 'preview'];
+      if (cell.st !== cell.prevSt && flipStates.includes(cell.st)) d.classList.add('flip-in');
+      cell.prevSt = cell.st;
+
+      // Gray out empty hidden cells on last move (only when prizes are still visible)
+      if (lastHiddenBlocked) d.classList.add('dim');
+
+      // Debug: show object markers on hidden cells after placement
+      if (DEBUG && phase !== 'idle' && cell.st === 'hidden' && cell.obj) {
+        const m = document.createElement('span');
+        m.className = cell.obj === 'bomb' ? 'dbg dbg-bomb' : 'dbg dbg-prize';
+        m.textContent = cell.obj === 'bomb' ? '•' : '+';
+        d.appendChild(m);
+      }
+
+      const prizeLabel = () => {
+        const s = document.createElement('span');
+        s.className = 'prize-name';
+        s.textContent = cell.name || '';
+        return s;
+      };
+
+      // End-of-game: show all remaining objects
+      if (ended && cell.obj && cell.st !== 'open-prize' && cell.st !== 'open-bomb') {
+        d.classList.add('ghost');
+        if (cell.obj === 'prize') d.appendChild(prizeLabel());
+        else d.textContent = '💣';
+        el.appendChild(d);
+        continue;
+      }
+
+      switch (cell.st) {
+        case 'safe':
+          d.classList.add('safe');
+          break;
+        case 'question':
+          d.classList.add('question');
+          d.textContent = '?';
+          break;
+        case 'preview':
+          d.classList.add('preview');
+          if (cell.obj === 'prize') d.appendChild(prizeLabel());
+          else d.textContent = '💣';
+          break;
+        case 'revealed':
+          d.classList.add('revealed');
+          break;
+        case 'open-prize':
+          d.classList.add('open-prize');
+          d.appendChild(prizeLabel());
+          break;
+        case 'open-bomb':
+          d.classList.add('open-bomb');
+          d.textContent = '💣';
+          break;
+      }
+
+      el.appendChild(d);
+    }
+  }
+}
+
+function renderHUD() {
+  // Move dots
+  const dotsEl = document.getElementById('dots');
+  dotsEl.innerHTML = '';
+  for (let i = 0; i < CFG.MAX_MOVES; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i >= movesLeft ? ' used' : '');
+    dotsEl.appendChild(d);
+  }
+
+  const stEl  = document.getElementById('status');
+  const msgEl = document.getElementById('msg');
+  msgEl.className = 'msg';
+  msgEl.textContent = '';
+  stEl.className = 'status';
+
+  const isLast = movesLeft === 1 && phase === 'playing';
+
+  switch (phase) {
+    case 'idle':
+      stEl.textContent = 'Нажмите на любую клетку';
+      break;
+    case 'playing':
+      stEl.className = 'status' + (isLast ? ' warn' : '');
+      stEl.textContent = isLast ? '⚡ Последний ход!' : `Осталось ходов: ${movesLeft}`;
+      break;
+    case 'won':
+      stEl.textContent = '';
+      msgEl.className = 'msg won';
+      msgEl.textContent = '🎉 Вы нашли приз!';
+      break;
+    case 'lost':
+      stEl.textContent = '';
+      msgEl.className = 'msg lost';
+      msgEl.textContent = '💥 Игра окончена!';
+      break;
+    case 'over':
+      stEl.textContent = '';
+      msgEl.className = 'msg over';
+      msgEl.textContent = 'Ходы закончились';
+      break;
+  }
+}
+
+document.getElementById('cnt-prizes').textContent = `🎁 Призов: ${CFG.PRIZES}`;
+document.getElementById('cnt-bombs').textContent  = `💣 Бомб: ${CFG.BOMBS}`;
+
+document.getElementById('btn').addEventListener('click', initGame);
+document.getElementById('replay-yes').addEventListener('click', initGame);
+document.getElementById('replay-no').addEventListener('click', () => { phase = 'playing'; render(); });
+initGame();
+</script>
+</body>
+</html>
