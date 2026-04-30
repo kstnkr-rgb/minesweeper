@@ -517,6 +517,14 @@ function noPrizesVisible() {
   ));
 }
 
+// Bomber last-move check: are there any ? or visible prizes on the field?
+function hasQuestionOrPrize() {
+  return grid.some(row => row.some(cell =>
+    cell.st === 'question' ||
+    (cell.st === 'preview' && cell.obj === 'prize')
+  ));
+}
+
 function checkReplayPrompt() {
   if (movesLeft !== 1 || phase !== 'playing') return;
   if (!noPrizesVisible()) return;
@@ -569,7 +577,29 @@ function onClick(r, c) {
 
   // ── BOMBER MODE ──────────────────────────────────────────────
   if (gameMode === 'bomber') {
-    // Only blue (hidden) and green (safe) cells accept a bomb
+    const isLastBomber = movesLeft === 1 && phase === 'playing';
+
+    // ── Last move: must pick ? or visible prize ──────────────────
+    if (isLastBomber && hasQuestionOrPrize()) {
+      // ? cell → reveal content
+      if (cell.st === 'question') {
+        movesLeft--;
+        cell.st = cell.obj === 'prize' ? 'open-prize' : 'open-bomb';
+        phase   = cell.obj === 'prize' ? 'won'        : 'lost';
+        render(); return;
+      }
+      // Visible prize → collect
+      if (cell.st === 'preview' && cell.obj === 'prize') {
+        cell.st = 'open-prize';
+        movesLeft--;
+        phase = 'won';
+        render(); return;
+      }
+      // Everything else blocked on last move
+      return;
+    }
+
+    // ── Normal moves: only blue (hidden) and green (safe) ────────
     if (cell.st !== 'hidden' && cell.st !== 'safe') return;
 
     // First tap → place objects
@@ -692,8 +722,9 @@ function renderGrid() {
   el.style.gridTemplateColumns = `repeat(${CFG.GRID_SIZE}, var(--cell))`;
   el.innerHTML = '';
 
-  const ended   = ['won','lost','over'].includes(phase);
-  const isLast  = movesLeft === 1 && phase === 'playing';
+  const ended            = ['won','lost','over'].includes(phase);
+  const isLast           = movesLeft === 1 && phase === 'playing';
+  const bomberLastForced = gameMode === 'bomber' && isLast && hasQuestionOrPrize();
 
   for (let r = 0; r < CFG.GRID_SIZE; r++) {
     for (let c = 0; c < CFG.GRID_SIZE; c++) {
@@ -703,8 +734,15 @@ function renderGrid() {
 
       const lastHiddenBlocked = gameMode !== 'bomber' && isLast && (cell.st === 'hidden' || cell.st === 'safe') && !noPrizesVisible();
 
+      // Bomber last move: blue/green are blocked when ? or prize exists
+      const bomberLastBlocked = bomberLastForced && (cell.st === 'hidden' || cell.st === 'safe');
+
       const clickable = gameMode === 'bomber'
-        ? !ended && (cell.st === 'hidden' || cell.st === 'safe')
+        ? !ended && (
+            bomberLastForced
+              ? cell.st === 'question' || (cell.st === 'preview' && cell.obj === 'prize')
+              : cell.st === 'hidden' || cell.st === 'safe'
+          )
         : !ended &&
           cell.st !== 'revealed' &&
           cell.st !== 'open-prize' &&
@@ -722,8 +760,8 @@ function renderGrid() {
       if (cell.st !== cell.prevSt && flipStates.includes(cell.st)) d.classList.add('flip-in');
       cell.prevSt = cell.st;
 
-      // Gray out empty hidden cells on last move (only when prizes are still visible)
-      if (lastHiddenBlocked) d.classList.add('dim');
+      // Gray out cells blocked on last move
+      if (lastHiddenBlocked || bomberLastBlocked) d.classList.add('dim');
 
       // Debug: show object markers on hidden cells after placement
       if (DEBUG && phase !== 'idle' && cell.st === 'hidden' && cell.obj) {
