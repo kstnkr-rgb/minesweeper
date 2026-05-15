@@ -667,7 +667,7 @@ function onClick(r, c) {
       setTimeout(() => {
         ring.remove();
         cell.animBomb = false;
-        cell.st = 'revealed';
+        cell.st = 'safe';
         movesLeft--;
         advanceNeighbors(r, c);
         animating = false;
