@@ -309,10 +309,6 @@
     .replay-btn-yes { background: linear-gradient(145deg, #2563eb, #1a4fd8); }
     .replay-btn-no  { background: linear-gradient(145deg, #374151, #1f2937); box-shadow: none; }
 
-    #mode-bar { display: flex; gap: 8px; justify-content: center; margin-bottom: 4px; }
-    .mode-btn { padding: 6px 16px; border-radius: 20px; border: 1px solid #2563eb66;
-                background: #0f1535; color: #94a3b8; font-size: .85rem; cursor: pointer; transition: all .2s; }
-    .mode-btn.active { background: linear-gradient(145deg, #2563eb, #1a4fd8); color: #fff; }
 
     .cell.destroyed {
       background: linear-gradient(145deg, #1a1a2e, #16162a);
@@ -354,10 +350,6 @@
     <div class="subtitle">Найди приз за 3 хода</div>
   </div>
 
-  <div id="mode-bar">
-    <button class="mode-btn active" id="mode-classic">Классика</button>
-    <button class="mode-btn"        id="mode-bomber">Бомбардировщик</button>
-  </div>
 
   <div class="hud">
     <div class="dots" id="dots"></div>
@@ -436,7 +428,7 @@ const DEBUG = false; // показывать маркеры объектов н�
 
 let grid = [], movesLeft = 0, phase = 'idle';
 // phase: idle | playing | won | lost | over | replay-prompt
-let gameMode = 'classic'; // 'classic' | 'bomber'
+const gameMode = 'bomber';
 let animating = false;    // true while bomb animation is in progress
 
 const rnd = n => Math.floor(Math.random() * n);
@@ -926,15 +918,12 @@ function renderHUD() {
       msgEl.textContent = 'Ходы закончились';
       break;
   }
-  document.getElementById('mode-classic').classList.toggle('active', gameMode === 'classic');
-  document.getElementById('mode-bomber').classList.toggle('active',  gameMode === 'bomber');
+
 }
 
 document.getElementById('btn').addEventListener('click', initGame);
 document.getElementById('replay-yes').addEventListener('click', initGame);
 document.getElementById('replay-no').addEventListener('click', () => { phase = 'playing'; render(); });
-document.getElementById('mode-classic').addEventListener('click', () => { gameMode = 'classic'; initGame(); });
-document.getElementById('mode-bomber').addEventListener('click',  () => { gameMode = 'bomber';  initGame(); });
 initGame();
 </script>
 </body>
