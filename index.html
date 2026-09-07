@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -347,13 +347,13 @@
 <div id="game">
   <div>
     <div class="title">Mystery Grid</div>
-    <div class="subtitle">Найди приз за 3 хода</div>
+    <div class="subtitle">Find the prize in 3 moves</div>
   </div>
 
 
   <div class="hud">
     <div class="dots" id="dots"></div>
-    <div class="status" id="status">Нажмите на любую клетку</div>
+    <div class="status" id="status">Tap any cell</div>
   </div>
 
   <div class="counters">
@@ -365,66 +365,66 @@
 
   <div class="msg" id="msg"></div>
 
-  <button class="btn" id="btn">Играть</button>
+  <button class="btn" id="btn">Play</button>
 </div>
 
 <div id="replay-overlay" class="replay-overlay hidden">
   <div class="replay-box">
-    <p class="replay-text">У вас нет доступных призов, хотите переиграть?</p>
+    <p class="replay-text">No prizes are available. Play again?</p>
     <div class="replay-btns">
-      <button class="btn replay-btn-yes" id="replay-yes">Да</button>
-      <button class="btn replay-btn-no"  id="replay-no">Нет</button>
+      <button class="btn replay-btn-yes" id="replay-yes">Yes</button>
+      <button class="btn replay-btn-no"  id="replay-no">No</button>
     </div>
   </div>
 </div>
 
 <script>
 /* ============================================================
-   НАСТРОЙКИ — меняйте эти значения для изменения игры
+   SETTINGS: change these values to tune the game
    ============================================================ */
 const CFG = {
-  GRID_SIZE:        5,   // Размер поля N×N
-  BOMBS:            5,   // Количество бомб
-  PRIZES:           8,   // Количество призов
-  MAX_MOVES:        4,   // Ходов за игру
-  MIN_FIRST_ACT:    1,   // Мин. активных клеток вокруг первого тапа
-  MAX_FIRST_ACT:    3,   // Макс. активных клеток вокруг первого тапа
+  GRID_SIZE:        5,   // Board size N x N
+  BOMBS:            5,   // Number of bombs
+  PRIZES:           8,   // Number of prizes
+  MAX_MOVES:        4,   // Moves per game
+  MIN_FIRST_ACT:    1,   // Min active cells around the first tap
+  MAX_FIRST_ACT:    3,   // Max active cells around the first tap
   PRIZES_LIST: [
-    'Кофе',
+    'Coffee',
     '-10%',
     '-10%',
     '-10%',
     '-15%',
     '-20%',
-    'Фишка с котом',
-    'Скидка на сладкое',
-    'Кошачий корм',
-    'Кошачий корм',
-    'Кошачий корм',
-    'Ещё одна игра',
-    'Ещё одна игра',
-    'Предсказание',
-    'Предсказание',
-    'Предсказание',
-    'Предсказание',
-    '50 бонусов',
-    'Билет',
-    'Билет',
-    'Билет',
-    'Билет',
-    'Билет',
-    'Билет',
-    'Билет',
-    'Дополнительный ход',
-    'Дополнительный ход',
-    'Дополнительный ход',
-    'Дополнительный ход',
-    'Дополнительный ход',
+    'Cat token',
+    'Sweets discount',
+    'Cat food',
+    'Cat food',
+    'Cat food',
+    'One more game',
+    'One more game',
+    'Fortune',
+    'Fortune',
+    'Fortune',
+    'Fortune',
+    '50 points',
+    'Ticket',
+    'Ticket',
+    'Ticket',
+    'Ticket',
+    'Ticket',
+    'Ticket',
+    'Ticket',
+    'Extra move',
+    'Extra move',
+    'Extra move',
+    'Extra move',
+    'Extra move',
   ],
 };
 /* ============================================================ */
 
-const DEBUG = false; // показывать маркеры объектов на скрытых клетках
+const DEBUG = false; // show object markers on hidden cells
 
 let grid = [], movesLeft = 0, phase = 'idle';
 // phase: idle | playing | won | lost | over | replay-prompt
@@ -466,9 +466,9 @@ function initGame() {
   const available = Math.min(window.innerWidth - 48, 420);
   const sz = Math.min(80, Math.max(48, Math.floor((available - 7 * (N - 1)) / N)));
   document.documentElement.style.setProperty('--cell', sz + 'px');
-  document.getElementById('cnt-prizes').textContent = `🎁 Призов: ${CFG.PRIZES}`;
+  document.getElementById('cnt-prizes').textContent = `🎁 Prizes: ${CFG.PRIZES}`;
   document.getElementById('cnt-bombs').textContent  = gameMode === 'bomber'
-    ? `🗑 Мусора: ${CFG.BOMBS}` : `💣 Бомб: ${CFG.BOMBS}`;
+    ? `🗑 Trash: ${CFG.BOMBS}` : `💣 Bombs: ${CFG.BOMBS}`;
   render();
 }
 
@@ -585,7 +585,7 @@ function advanceNeighbors(r, c) {
     // safe (green) cells are immune to explosions
     if (n.st === 'question') { n.st = 'preview';  return; }
     if (n.st === 'preview')  { n.st = 'destroyed'; return; }
-    // safe / revealed / open-* / destroyed — не трогаем
+    // safe / revealed / open-* / destroyed: left untouched
   });
 }
 
@@ -689,7 +689,7 @@ function onClick(r, c) {
     if (cell.st === 'preview' && cell.obj === 'bomb') return; // visible bomb — untouchable
     cell.st = cell.obj === 'prize' ? 'open-prize' : 'open-bomb';
     movesLeft--;
-    if (cell.obj === 'prize' && cell.name === 'Дополнительный ход') {
+    if (cell.obj === 'prize' && cell.name === 'Extra move') {
       revealNeighborsBonus(r, c);
       movesLeft++;
       checkReplayPrompt();
@@ -722,7 +722,7 @@ function onClick(r, c) {
       // Direct hit on an object
       cell.st = cell.obj === 'prize' ? 'open-prize' : 'open-bomb';
       movesLeft--;
-      if (cell.obj === 'prize' && cell.name === 'Дополнительный ход') {
+      if (cell.obj === 'prize' && cell.name === 'Extra move') {
         revealNeighborsBonus(r, c);
         movesLeft++;
         checkReplayPrompt();
@@ -895,27 +895,27 @@ function renderHUD() {
 
   switch (phase) {
     case 'idle':
-      stEl.textContent = gameMode === 'bomber' ? 'Тапни, чтобы поставить бомбу' : 'Нажмите на любую клетку';
+      stEl.textContent = gameMode === 'bomber' ? 'Tap to drop a bomb' : 'Tap any cell';
       break;
     case 'playing':
       stEl.className = 'status' + (isLast ? ' warn' : '');
-      stEl.textContent = isLast ? '⚡ Последний ход!' :
-        gameMode === 'bomber' ? `Бомб: ${movesLeft}` : `Осталось ходов: ${movesLeft}`;
+      stEl.textContent = isLast ? '⚡ Last move!' :
+        gameMode === 'bomber' ? `Bombs: ${movesLeft}` : `Moves left: ${movesLeft}`;
       break;
     case 'won':
       stEl.textContent = '';
       msgEl.className = 'msg won';
-      msgEl.textContent = '🎉 Вы нашли приз!';
+      msgEl.textContent = '🎉 You found a prize!';
       break;
     case 'lost':
       stEl.textContent = '';
       msgEl.className = 'msg lost';
-      msgEl.textContent = gameMode === 'bomber' ? '🗑 Попался мусор!' : '💥 Игра окончена!';
+      msgEl.textContent = gameMode === 'bomber' ? '🗑 You hit the trash!' : '💥 Game over!';
       break;
     case 'over':
       stEl.textContent = '';
       msgEl.className = 'msg over';
-      msgEl.textContent = 'Ходы закончились';
+      msgEl.textContent = 'Out of moves';
       break;
   }
 
